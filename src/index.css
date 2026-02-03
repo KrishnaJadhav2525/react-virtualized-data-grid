@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* design tokens as css vars */
+  --cell-height: 36px;
+  --header-height: 40px;
+  --grid-bg: #ffffff;
+  --grid-header: #f3f4f6;
+  --grid-row-alt: #f9fafb;
+  --grid-border: #e5e7eb;
+  --grid-focus: #3b82f6;
+  --grid-text: #111827;
+  --grid-text-secondary: #6b7280;
+}
+
+/* high contrast mode */
+.high-contrast {
+  --grid-bg: #000000;
+  --grid-header: #1a1a1a;
+  --grid-row-alt: #0a0a0a;
+  --grid-border: #ffffff;
+  --grid-focus: #ffff00;
+  --grid-text: #ffffff;
+  --grid-text-secondary: #cccccc;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--grid-bg);
+  color: var(--grid-text);
+}
+
+* {
+  box-sizing: border-box;
+}
