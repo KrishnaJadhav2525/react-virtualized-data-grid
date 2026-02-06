@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 
 // types - keeping them here, not abstracting to separate file
 // because "I just started building and didn't bother splitting yet"
@@ -539,75 +539,6 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
         return () => cancelAnimationFrame(rafId)
     }, [focusedCell, startRow, visibleColumns, editingCell])
 
-    // render a cell - inline here, not a separate component on purpose
-    const renderCell = (row: RowData, col: ColumnDef, rowIdx: number, colIdx: number, isPinned: boolean) => {
-        const actualRowIdx = startRow + rowIdx
-        const absoluteColIdx = isPinned ? colIdx : pinnedColumns.length + (scrollableColumns.findIndex(c => c.key === col.key) ?? 0)
-
-        const isFocused = focusedCell?.row === actualRowIdx && focusedCell?.col === absoluteColIdx
-        const isEditing = editingCell?.rowIndex === actualRowIdx && editingCell?.colKey === col.key
-
-        const cellValue = row[col.key]
-
-        return (
-            <div
-                key={col.key}
-                role="gridcell"
-                aria-colindex={absoluteColIdx + 1}
-                aria-readonly={!col.editable}
-                tabIndex={isFocused ? 0 : -1}
-                className={`
-          flex items-center px-3 border-r border-b border-[var(--grid-border)]
-          text-sm truncate
-          ${isFocused ? 'outline outline-2 outline-[var(--grid-focus)] outline-offset-[-2px] z-10' : ''}
-          ${rowIdx % 2 === 1 ? 'bg-[var(--grid-row-alt)]' : 'bg-[var(--grid-bg)]'}
-        `}
-                style={{
-                    width: col.width,
-                    height: ROW_HEIGHT,
-                    minWidth: col.width,
-                    flexShrink: 0
-                }}
-                onClick={() => setFocusedCell({ row: actualRowIdx, col: absoluteColIdx })}
-                onDoubleClick={() => {
-                    if (col.editable) {
-                        startEditing(rowIdx, col.key)
-                    }
-                }}
-                onFocus={() => setFocusedCell({ row: actualRowIdx, col: absoluteColIdx })}
-            >
-                {isEditing ? (
-                    <div className="flex flex-col w-full">
-                        <input
-                            type="text"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={() => validateAndSave()}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault()
-                                    validateAndSave()
-                                } else if (e.key === 'Escape') {
-                                    e.preventDefault()
-                                    cancelEditing()
-                                }
-                                e.stopPropagation()
-                            }}
-                            autoFocus
-                            className="w-full px-1 py-0.5 border border-[var(--grid-focus)] rounded text-sm"
-                            aria-label={`Editing ${col.label}`}
-                        />
-                        {editError && (
-                            <span className="text-xs text-red-600" role="alert">{editError}</span>
-                        )}
-                    </div>
-                ) : (
-                    <span>{cellValue != null ? String(cellValue) : ''}</span>
-                )}
-            </div>
-        )
-    }
-
     // render header cell
     const renderHeaderCell = (col: ColumnDef) => {
         const sortInfo = sortConfig.find(s => s.columnKey === col.key)
@@ -677,6 +608,24 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
             }
         }
     }, [focusedCell, pinnedColumns, scrollableColumns, sortedData])
+
+    const getCellProps = useCallback((row: RowData, col: ColumnDef, rowIdx: number, colIdx: number, isPinned: boolean) => {
+        const actualRowIdx = startRow + rowIdx
+        const absoluteColIdx = isPinned ? colIdx : pinnedColumns.length + (scrollableColumns.findIndex(c => c.key === col.key) ?? 0)
+
+        const isFocused = focusedCell?.row === actualRowIdx && focusedCell?.col === absoluteColIdx
+        const isEditing = editingCell?.rowIndex === actualRowIdx && editingCell?.colKey === col.key
+
+        return {
+            row,
+            col,
+            actualRowIdx,
+            absoluteColIdx,
+            isFocused,
+            isEditing,
+            rowIdx // needed for alternate bg
+        }
+    }, [startRow, pinnedColumns.length, scrollableColumns, focusedCell, editingCell])
 
     return (
         <div
@@ -781,7 +730,22 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                             >
                                 {/* pinned cells */}
                                 <div className="flex sticky left-0 z-10 bg-[var(--grid-bg)]">
-                                    {pinnedColumns.map((col, colIdx) => renderCell(row, col, rowIdx, colIdx, true))}
+                                    {pinnedColumns.map((col, colIdx) => {
+                                        const props = getCellProps(row, col, rowIdx, colIdx, true)
+                                        return (
+                                            <Cell
+                                                key={col.key}
+                                                {...props}
+                                                onFocusMain={(r, c) => setFocusedCell({ row: r, col: c })}
+                                                onEditMain={(r, k) => startEditing(r, k)}
+                                                editValue={editValue}
+                                                setEditValue={setEditValue}
+                                                validateAndSave={validateAndSave}
+                                                cancelEditing={cancelEditing}
+                                                editError={editError}
+                                            />
+                                        )
+                                    })}
                                 </div>
 
                                 {/* scrollable cells */}
@@ -792,7 +756,22 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                                         width: scrollableWidth
                                     }}
                                 >
-                                    {visibleScrollableCols.map((col, colIdx) => renderCell(row, col, rowIdx, colIdx, false))}
+                                    {visibleScrollableCols.map((col, colIdx) => {
+                                        const props = getCellProps(row, col, rowIdx, colIdx, false)
+                                        return (
+                                            <Cell
+                                                key={col.key}
+                                                {...props}
+                                                onFocusMain={(r, c) => setFocusedCell({ row: r, col: c })}
+                                                onEditMain={(r, k) => startEditing(r, k)}
+                                                editValue={editValue}
+                                                setEditValue={setEditValue}
+                                                validateAndSave={validateAndSave}
+                                                cancelEditing={cancelEditing}
+                                                editError={editError}
+                                            />
+                                        )
+                                    })}
                                 </div>
                             </div>
                         ))}
@@ -802,3 +781,84 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
         </div>
     )
 }
+
+// extracted for performance (prevent re-renders of all cells on focus change)
+// using React.memo to ensure only changing cells re-render
+const Cell = React.memo(({
+    row, col, actualRowIdx, absoluteColIdx, isFocused, isEditing, rowIdx,
+    onFocusMain, onEditMain, editValue, setEditValue, validateAndSave, cancelEditing, editError
+}: {
+    row: RowData
+    col: ColumnDef
+    actualRowIdx: number
+    absoluteColIdx: number
+    isFocused: boolean
+    isEditing: boolean
+    rowIdx: number
+    onFocusMain: (r: number, c: number) => void
+    onEditMain: (r: number, k: string) => void
+    editValue: string
+    setEditValue: (v: string) => void
+    validateAndSave: () => void
+    cancelEditing: () => void
+    editError: string | null
+}) => {
+    return (
+        <div
+            role="gridcell"
+            aria-colindex={absoluteColIdx + 1}
+            aria-readonly={!col.editable}
+            tabIndex={isFocused ? 0 : -1}
+            className={`
+      flex items-center px-3 border-r border-b border-[var(--grid-border)]
+      text-sm truncate
+      ${isFocused ? 'outline outline-2 outline-[var(--grid-focus)] outline-offset-[-2px] z-10' : ''}
+      ${rowIdx % 2 === 1 ? 'bg-[var(--grid-row-alt)]' : 'bg-[var(--grid-bg)]'}
+    `}
+            style={{
+                width: col.width,
+                height: ROW_HEIGHT,
+                minWidth: col.width,
+                flexShrink: 0,
+                // performance optimization to reduce painting overhead
+                contain: 'strict',
+            }}
+            onClick={() => onFocusMain(actualRowIdx, absoluteColIdx)}
+            onDoubleClick={() => {
+                if (col.editable) {
+                    onEditMain(rowIdx, col.key)
+                }
+            }}
+            onFocus={() => onFocusMain(actualRowIdx, absoluteColIdx)}
+        >
+            {isEditing ? (
+                <div className="flex flex-col w-full">
+                    <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => validateAndSave()}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault()
+                                validateAndSave()
+                            } else if (e.key === 'Escape') {
+                                e.preventDefault()
+                                cancelEditing()
+                            }
+                            e.stopPropagation()
+                        }}
+                        autoFocus
+                        className="w-full px-1 py-0.5 border border-[var(--grid-focus)] rounded text-sm"
+                        aria-label={`Editing ${col.label}`}
+                    />
+                    {editError && (
+                        <span className="text-xs text-red-600" role="alert">{editError}</span>
+                    )}
+                </div>
+            ) : (
+                <span>{row[col.key] != null ? String(row[col.key]) : ''}</span>
+            )}
+        </div>
+    )
+})
