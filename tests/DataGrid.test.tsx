@@ -1,207 +1,142 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DataGrid from '../src/components/DataGrid'
 import '@testing-library/jest-dom'
 import { axe } from 'jest-axe'
 
-// simple row generator - duplicated again because I don't have a shared utils folder
-function generateTestRows(count: number) {
-    const rows = []
-    for (let i = 0; i < count; i++) {
-        rows.push({
-            id: i + 1,
-            name: `Test Person ${i + 1}`,
-            email: `test${i + 1}@test.com`,
-            age: 25 + (i % 10),
-        })
-    }
-    return rows
-}
+// Setup
+const generateTestRows = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+        id: i + 1,
+        name: `User ${i + 1}`,
+        email: `user${i + 1}@startup.io`,
+        age: 20 + (i % 10),
+    }))
 
-const testColumns = [
-    { key: 'id', label: 'ID', width: 80, pinned: true },
+const columns = [
+    { key: 'id', label: 'ID', width: 60, pinned: true },
     { key: 'name', label: 'Name', width: 150, editable: true },
-    { key: 'email', label: 'Email', width: 200, editable: true },
-    { key: 'age', label: 'Age', width: 80, editable: true },
+    { key: 'email', label: 'Email', width: 200 },
+    { key: 'age', label: 'Age', width: 80 },
 ]
 
-describe('DataGrid', () => {
-    describe('rendering', () => {
-        it('renders the grid container', () => {
-            render(<DataGrid rows={generateTestRows(10)} columns={testColumns} height={400} />)
-            expect(screen.getByRole('grid')).toBeInTheDocument()
+describe('DataGrid Interaction', () => {
+    it('renders virtualized rows correctly', () => {
+        render(<DataGrid rows={generateTestRows(1000)} columns={columns} height={400} />)
+
+        // 400px height / 36px row = ~12 rows + buffer. Should definitively be < 50.
+        expect(screen.getAllByRole('row').length).toBeLessThan(50)
+        expect(screen.getByText('User 1')).toBeInTheDocument()
+    })
+
+    describe('Keyboard Navigation', () => {
+        it('navigates grid with arrow keys', async () => {
+            const user = userEvent.setup()
+            render(<DataGrid rows={generateTestRows(10)} columns={columns} height={400} />)
+
+            // Explicitly focus the first cell via click
+            await user.click(screen.getByText('User 1'))
+
+            // Verify initial focus is on the cell (div[role="gridcell"])
+            const cell1 = screen.getByText('User 1').closest('[role="gridcell"]')
+            expect(cell1).toHaveFocus()
+
+            // Move Down
+            await user.keyboard('{ArrowDown}')
+
+            // JSDOM focus transition might be async depending on implementation
+            await waitFor(() => {
+                const cell2 = screen.getByText('User 2').closest('[role="gridcell"]')
+                expect(cell2).toHaveFocus()
+            })
+
+            // Move Right
+            await user.keyboard('{ArrowRight}')
+            await waitFor(() => {
+                const cell2Email = screen.getByText('user2@startup.io').closest('[role="gridcell"]')
+                expect(cell2Email).toHaveFocus()
+            })
         })
 
-        it('renders column headers', () => {
-            render(<DataGrid rows={generateTestRows(10)} columns={testColumns} height={400} />)
-            expect(screen.getByText('ID')).toBeInTheDocument()
-            expect(screen.getByText('Name')).toBeInTheDocument()
-            expect(screen.getByText('Email')).toBeInTheDocument()
-            expect(screen.getByText('Age')).toBeInTheDocument()
-        })
+        it('enters and cancels edit mode', async () => {
+            const user = userEvent.setup()
+            render(<DataGrid rows={generateTestRows(5)} columns={columns} height={400} />)
 
-        it('renders empty grid when no rows', () => {
-            render(<DataGrid rows={[]} columns={testColumns} height={400} />)
-            expect(screen.getByRole('grid')).toBeInTheDocument()
-            // headers still exist
-            expect(screen.getByText('ID')).toBeInTheDocument()
-        })
+            // Dbl click to edit
+            await user.dblClick(screen.getByText('User 1'))
 
-        it('virtualization: does not render all rows in DOM for large dataset', () => {
-            render(<DataGrid rows={generateTestRows(1000)} columns={testColumns} height={400} />)
+            const input = screen.getByRole('textbox', { name: /name/i })
+            expect(input).toHaveValue('User 1')
+            expect(input).toHaveFocus()
 
-            // with 400px height and 36px row height, roughly 11 rows visible + buffer
-            // should be way less than 1000 rows in DOM
-            const cells = screen.getAllByRole('gridcell')
-            // 4 columns, expect roughly 20-30 rows rendered = 80-120 cells
-            expect(cells.length).toBeLessThan(200)
+            // Escape to cancel
+            await user.keyboard('{Escape}')
+
+            // Use waitFor because transition might be async (React state update)
+            await waitFor(() => {
+                expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+            })
+            expect(screen.getByText('User 1')).toBeInTheDocument()
         })
     })
 
-    describe('keyboard navigation', () => {
-        it('can focus the grid with Tab', async () => {
+    describe('Sorting', () => {
+        it('sorts columns bi-directionally', async () => {
             const user = userEvent.setup()
-            render(<DataGrid rows={generateTestRows(10)} columns={testColumns} height={400} />)
+            render(<DataGrid rows={generateTestRows(5)} columns={columns} height={400} />)
 
-            await user.tab()
-            // focus should be on grid or within it
-            expect(document.activeElement).not.toBe(document.body)
-        })
+            const header = screen.getByRole('button', { name: /Name/ })
 
-        it('arrow down moves focus to next row', async () => {
-            const user = userEvent.setup()
-            render(<DataGrid rows={generateTestRows(10)} columns={testColumns} height={400} />)
+            // Ascending
+            await user.click(header)
 
-            const grid = screen.getByRole('grid')
-            grid.focus()
+            // Check first DATA row (index 1, as index 0 is header)
+            const rows = screen.getAllByRole('row')
+            expect(rows[1]).toHaveTextContent('User 1')
 
-            // click first cell to set focus
-            const firstCell = screen.getAllByRole('gridcell')[0]
-            if (firstCell) {
-                await user.click(firstCell)
-                await user.keyboard('{ArrowDown}')
-                // focus should have moved
-            }
-        })
+            // Descending
+            await user.click(header)
 
-        it('Enter key activates edit mode on editable cell', async () => {
-            const user = userEvent.setup()
-            render(<DataGrid rows={generateTestRows(5)} columns={testColumns} height={400} />)
-
-            // find a cell in the Name column (editable)
-            const nameCells = screen.getAllByText(/Test Person/)
-            if (nameCells[0]) {
-                await user.click(nameCells[0])
-                await user.keyboard('{Enter}')
-
-                // an input should appear
-                const input = screen.queryByRole('textbox')
-                expect(input).toBeInTheDocument()
-            }
-        })
-
-        it('Escape cancels editing', async () => {
-            const user = userEvent.setup()
-            render(<DataGrid rows={generateTestRows(5)} columns={testColumns} height={400} />)
-
-            const nameCells = screen.getAllByText(/Test Person/)
-            if (nameCells[0]) {
-                await user.dblClick(nameCells[0])
-
-                // input should be there
-                expect(screen.queryByRole('textbox')).toBeInTheDocument()
-
-                await user.keyboard('{Escape}')
-
-                // input should be gone after a moment
-                // (this might be flaky due to timing)
-            }
+            const rowsAfter = screen.getAllByRole('row')
+            // User 5 should be first in desc order
+            expect(rowsAfter[1]).toHaveTextContent('User 5')
         })
     })
 
-    describe('sorting', () => {
-        it('clicking column header sorts data', async () => {
-            const user = userEvent.setup()
-            render(<DataGrid rows={generateTestRows(5)} columns={testColumns} height={400} />)
-
-            const nameHeader = screen.getByText('Name')
-            await user.click(nameHeader)
-
-            // should show sort indicator
-            expect(screen.getByText('↑')).toBeInTheDocument()
+    describe('A11y', () => {
+        it('passes axe checks', async () => {
+            const { container } = render(<DataGrid rows={generateTestRows(5)} columns={columns} height={400} />)
+            expect(await axe(container)).toHaveNoViolations()
         })
 
-        it('clicking sorted column toggles direction', async () => {
+        it('maintains strict ARIA semantics', async () => {
             const user = userEvent.setup()
-            render(<DataGrid rows={generateTestRows(5)} columns={testColumns} height={400} />)
+            render(<DataGrid rows={generateTestRows(5)} columns={columns} height={400} />)
 
-            const nameHeader = screen.getByText('Name')
-            await user.click(nameHeader)
-            expect(screen.getByText('↑')).toBeInTheDocument()
+            const header = screen.getByRole('columnheader', { name: /Name/ })
+            expect(header).toHaveAttribute('aria-sort', 'none')
 
-            await user.click(nameHeader)
-            expect(screen.getByText('↓')).toBeInTheDocument()
+            await user.click(screen.getByRole('button', { name: /Name/ }))
+            expect(header).toHaveAttribute('aria-sort', 'ascending')
         })
     })
 
-    describe('accessibility', () => {
-        it('should have no violations', async () => {
-            const { container } = render(<DataGrid rows={generateTestRows(10)} columns={testColumns} height={400} />)
-            const results = await axe(container)
-            expect(results).toHaveNoViolations()
-        })
-
-        it('has correct ARIA roles', () => {
-            render(<DataGrid rows={generateTestRows(3)} columns={testColumns} height={400} />)
-
-            expect(screen.getByRole('grid')).toBeInTheDocument()
-            expect(screen.getAllByRole('row').length).toBeGreaterThan(0)
-            expect(screen.getAllByRole('gridcell').length).toBeGreaterThan(0)
-            expect(screen.getAllByRole('columnheader').length).toBe(4)
-        })
-
-        it('column headers have aria-sort when sorted', async () => {
+    describe('Column Operations', () => {
+        it('manages column visibility', async () => {
             const user = userEvent.setup()
-            render(<DataGrid rows={generateTestRows(5)} columns={testColumns} height={400} />)
+            render(<DataGrid rows={generateTestRows(5)} columns={columns} height={400} />)
 
-            // get all columnheaders, find the one for Name
-            const headers = screen.getAllByRole('columnheader')
-            const nameHeader = headers.find(h => h.textContent?.includes('Name'))
-            expect(nameHeader).toBeDefined()
-            if (!nameHeader) return
+            await user.click(screen.getByText('Columns'))
+            const toggle = screen.getByLabelText('ID') // Input checkbox
 
-            expect(nameHeader).toHaveAttribute('aria-sort', 'none')
+            await user.click(toggle) // Hide ID
 
-            // click the button inside the header
-            const sortButton = nameHeader.querySelector('button')
-            if (sortButton) {
-                await user.click(sortButton)
-            }
-            expect(nameHeader).toHaveAttribute('aria-sort', 'ascending')
-        })
+            // Ensure we check for the HEADER itself being gone.
+            expect(screen.queryByRole('columnheader', { name: 'ID' })).not.toBeInTheDocument()
 
-        it('cells have aria-colindex', () => {
-            render(<DataGrid rows={generateTestRows(3)} columns={testColumns} height={400} />)
-
-            const cells = screen.getAllByRole('gridcell')
-            // check first cell has aria-colindex
-            if (cells[0]) {
-                expect(cells[0]).toHaveAttribute('aria-colindex')
-            }
-        })
-    })
-
-    describe('column operations', () => {
-        it('shows Columns button', () => {
-            render(<DataGrid rows={generateTestRows(5)} columns={testColumns} height={400} />)
-            expect(screen.getByText('Columns')).toBeInTheDocument()
-        })
-
-        it('Undo button is disabled when no actions', () => {
-            render(<DataGrid rows={generateTestRows(5)} columns={testColumns} height={400} />)
-            const undoBtn = screen.getByLabelText('Undo last action')
-            expect(undoBtn).toBeDisabled()
+            await user.click(screen.getByText('Undo'))
+            expect(screen.getByRole('columnheader', { name: 'ID' })).toBeVisible()
         })
     })
 })

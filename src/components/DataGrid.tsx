@@ -517,6 +517,28 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
         }
     }, [focusedCell, pinnedColumns, scrollableColumns, sortedData, scrollTop, viewportHeight, editingCell, validateAndSave, startEditing, startRow, cancelEditing, handleUndo])
 
+    // sync focus with DOM for accessibility
+    useEffect(() => {
+        if (!focusedCell || editingCell) return
+
+        // precise timing for virtualized rendering
+        const rafId = requestAnimationFrame(() => {
+            const { row, col } = focusedCell
+            // We need to find the specific cell in the DOM. 
+            // construct a selector based on ARIA attributes since we don't have refs to every cell
+            // Note: `col` in state is absolute index. We need to match what's rendered.
+            // But getting the exact DOM node is tricky with virtualization.
+            // Let's rely on the fact that the rendered cell will have tabIndex=0
+
+            const activeCell = containerRef.current?.querySelector('[role="gridcell"][tabindex="0"]') as HTMLElement
+            if (activeCell) {
+                activeCell.focus()
+            }
+        })
+
+        return () => cancelAnimationFrame(rafId)
+    }, [focusedCell, startRow, visibleColumns, editingCell])
+
     // render a cell - inline here, not a separate component on purpose
     const renderCell = (row: RowData, col: ColumnDef, rowIdx: number, colIdx: number, isPinned: boolean) => {
         const actualRowIdx = startRow + rowIdx
