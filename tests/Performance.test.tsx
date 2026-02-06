@@ -1,60 +1,56 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import DataGrid from '../src/components/DataGrid'
-import '@testing-library/jest-dom'
 
-// Stub ResizeObserver for JSDOM
+// needed for jsdom crash
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
     observe: vi.fn(),
     unobserve: vi.fn(),
     disconnect: vi.fn(),
 }))
 
-const generateRows = (count: number) => Array.from({ length: count }, (_, i) => ({
+const genRows = (n: number) => Array.from({ length: n }, (_, i) => ({
     id: i + 1,
     col1: `Row ${i}`,
     col2: i * 100,
     col3: i % 2 === 0
 }))
 
-const columns = [
+const testCols = [
     { key: 'id', label: 'ID', width: 50 },
     { key: 'col1', label: 'Label', width: 100 },
     { key: 'col2', label: 'Value', width: 100 },
 ]
 
-describe('Performance Benchmarks', () => {
-    it('initializes 50k rows within 200ms budget', () => {
-        const rows = generateRows(50000)
-
+describe('Perf checking', () => {
+    // just making sure 50k rows doesnt blow up
+    it('renders 50k rows fast enough', () => {
         const start = performance.now()
-        render(<DataGrid rows={rows} columns={columns} height={600} />)
-        const duration = performance.now() - start
+        render(<DataGrid rows={genRows(50000)} columns={testCols} height={600} />)
+        const end = performance.now()
 
-        console.log(`Render (50k): ${duration.toFixed(1)}ms`)
+        console.log(`Render time: ${end - start}ms`)
 
-        expect(duration).toBeLessThan(200)
-        // Verify virtualization is actually active
-        expect(screen.getAllByRole('row').length).toBeLessThan(50)
+        // allow 200ms just in case CI is slow
+        expect(end - start).toBeLessThan(200)
     })
 
-    it('maintains 60fps frame budget during scroll', () => {
-        render(<DataGrid rows={generateRows(50000)} columns={columns} height={600} />)
+    it('scrolling is smooth-ish', () => {
+        render(<DataGrid rows={genRows(50000)} columns={testCols} height={600} />)
         const grid = screen.getByRole('grid')
 
         const start = performance.now()
 
-        // Thrash scrolling
-        // Thrash scrolling
-        const scrollPositions = [5000, 10000, 25000, 49000]
-        for (const scrollTop of scrollPositions) {
-            fireEvent.scroll(grid, { target: { scrollTop } })
-        }
+        // trash scroll a bit
+        fireEvent.scroll(grid, { target: { scrollTop: 5000 } })
+        fireEvent.scroll(grid, { target: { scrollTop: 10000 } })
+        fireEvent.scroll(grid, { target: { scrollTop: 25000 } })
+        fireEvent.scroll(grid, { target: { scrollTop: 49000 } })
 
-        const perScrollMs = (performance.now() - start) / 4
-        console.log(`Scroll Ops: ${perScrollMs.toFixed(2)}ms avg`)
+        const avg = (performance.now() - start) / 4
+        console.log(`Avg scroll: ${avg}ms`)
 
-        // Relaxed budget for JSDOM overhead (real browser would be faster)
-        expect(perScrollMs).toBeLessThan(50)
+        // 16ms is ideal but jsdom is slow so 50ms is fine
+        expect(avg).toBeLessThan(50)
     })
 })

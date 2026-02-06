@@ -257,7 +257,7 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
         e.dataTransfer.setData('text/plain', colKey)
     }, [])
 
-    const handleDragOver = useCallback((e: React.DragEvent, _targetColKey: string) => {
+    const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault() // necessary to allow dropping
         e.dataTransfer.dropEffect = 'move'
     }, [])
@@ -523,7 +523,7 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
 
         // precise timing for virtualized rendering
         const rafId = requestAnimationFrame(() => {
-            const { row, col } = focusedCell
+
             // We need to find the specific cell in the DOM. 
             // construct a selector based on ARIA attributes since we don't have refs to every cell
             // Note: `col` in state is absolute index. We need to match what's rendered.
@@ -609,7 +609,7 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
     }
 
     // render header cell
-    const renderHeaderCell = (col: ColumnDef, _colIdx: number, _isPinned: boolean) => {
+    const renderHeaderCell = (col: ColumnDef) => {
         const sortInfo = sortConfig.find(s => s.columnKey === col.key)
         const sortIndex = sortConfig.findIndex(s => s.columnKey === col.key)
 
@@ -620,7 +620,7 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                 aria-sort={sortInfo ? (sortInfo.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
                 draggable
                 onDragStart={(e) => handleDragStart(e, col.key)}
-                onDragOver={(e) => handleDragOver(e, col.key)}
+                onDragOver={(e) => handleDragOver(e)}
                 onDrop={(e) => handleDrop(e, col.key)}
                 className={`
                     flex items-center px-3 border-r border-b border-[var(--grid-border)] bg-[var(--grid-header)] font-medium text-sm select-none relative
@@ -754,7 +754,7 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                 >
                     {/* pinned header cells */}
                     <div className="flex sticky left-0 z-30 bg-[var(--grid-header)]">
-                        {pinnedColumns.map((col, idx) => renderHeaderCell(col, idx, true))}
+                        {pinnedColumns.map((col) => renderHeaderCell(col))}
                     </div>
 
                     {/* scrollable header cells */}
@@ -765,7 +765,7 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                             width: scrollableWidth
                         }}
                     >
-                        {visibleScrollableCols.map((col, idx) => renderHeaderCell(col, pinnedColumns.length + idx, false))}
+                        {visibleScrollableCols.map((col) => renderHeaderCell(col))}
                     </div>
                 </div>
 
