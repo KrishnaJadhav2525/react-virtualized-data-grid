@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DataGrid from '../src/components/DataGrid'
 import '@testing-library/jest-dom'
+import { axe } from 'jest-axe'
 
 // simple row generator - duplicated again because I don't have a shared utils folder
 function generateTestRows(count: number) {
@@ -145,6 +146,12 @@ describe('DataGrid', () => {
     })
 
     describe('accessibility', () => {
+        it('should have no violations', async () => {
+            const { container } = render(<DataGrid rows={generateTestRows(10)} columns={testColumns} height={400} />)
+            const results = await axe(container)
+            expect(results).toHaveNoViolations()
+        })
+
         it('has correct ARIA roles', () => {
             render(<DataGrid rows={generateTestRows(3)} columns={testColumns} height={400} />)
 

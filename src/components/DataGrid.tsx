@@ -73,6 +73,9 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
     const [resizeStartX, setResizeStartX] = useState(0)
     const [resizeStartWidth, setResizeStartWidth] = useState(0)
 
+    // reordering state
+    const [draggedCol, setDraggedCol] = useState<string | null>(null)
+
     // visible columns (not hidden)
     const visibleColumns = useMemo(() => {
         return columns.filter(c => !hiddenColumns.has(c.key))
@@ -246,6 +249,58 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
         }
     }, [resizingCol, resizeStartX, resizeStartWidth])
 
+    // reordering handlers
+    const handleDragStart = useCallback((e: React.DragEvent, colKey: string) => {
+        setDraggedCol(colKey)
+        e.dataTransfer.effectAllowed = 'move'
+        // needed for firefox
+        e.dataTransfer.setData('text/plain', colKey)
+    }, [])
+
+    const handleDragOver = useCallback((e: React.DragEvent, _targetColKey: string) => {
+        e.preventDefault() // necessary to allow dropping
+        e.dataTransfer.dropEffect = 'move'
+    }, [])
+
+    const handleDrop = useCallback((e: React.DragEvent, targetColKey: string) => {
+        e.preventDefault()
+
+        if (!draggedCol || draggedCol === targetColKey) return
+
+        const sourceCol = columns.find(c => c.key === draggedCol)
+        const targetCol = columns.find(c => c.key === targetColKey)
+
+        if (!sourceCol || !targetCol) return
+
+        // simple rule: only reorder if same pinned state to avoid confusion
+        // "I didn't want to handle the logic of pinning/unpinning on drag yet"
+        if (!!sourceCol.pinned !== !!targetCol.pinned) return
+
+        // save for undo
+        setUndoStack(prev => [...prev, {
+            type: 'column-reorder',
+            payload: { columns: [...columns] }
+        }])
+
+        setColumns(prev => {
+            const newCols = [...prev]
+            const sourceIdx = newCols.findIndex(c => c.key === draggedCol)
+            const targetIdx = newCols.findIndex(c => c.key === targetColKey)
+
+            if (sourceIdx >= 0 && targetIdx >= 0) {
+                // remove source
+                const [removed] = newCols.splice(sourceIdx, 1)
+                // insert at target
+                if (removed) {
+                    newCols.splice(targetIdx, 0, removed)
+                }
+            }
+            return newCols
+        })
+
+        setDraggedCol(null)
+    }, [draggedCol, columns])
+
     // editing handlers
     const startEditing = useCallback((rowIndex: number, colKey: string) => {
         const actualRowIdx = startRow + rowIndex
@@ -353,6 +408,9 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                 }
                 return next
             })
+        } else if (action.type === 'column-reorder') {
+            const { columns: oldColumns } = action.payload as { columns: ColumnDef[] }
+            setColumns(oldColumns)
         }
     }, [undoStack, sortedData, rows])
 
@@ -538,7 +596,14 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                 key={col.key}
                 role="columnheader"
                 aria-sort={sortInfo ? (sortInfo.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
-                className="flex items-center px-3 border-r border-b border-[var(--grid-border)] bg-[var(--grid-header)] font-medium text-sm select-none relative"
+                draggable
+                onDragStart={(e) => handleDragStart(e, col.key)}
+                onDragOver={(e) => handleDragOver(e, col.key)}
+                onDrop={(e) => handleDrop(e, col.key)}
+                className={`
+                    flex items-center px-3 border-r border-b border-[var(--grid-border)] bg-[var(--grid-header)] font-medium text-sm select-none relative
+                    ${draggedCol === col.key ? 'opacity-50' : ''}
+                `}
                 style={{
                     width: col.width,
                     height: HEADER_HEIGHT,
@@ -641,6 +706,11 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                 </span>
             </div>
 
+            {/* screen reader live region - moved outside grid to satisfy ARIA constraints */}
+            <div aria-live="polite" aria-atomic="true" className="sr-only">
+                {announcement}
+            </div>
+
             {/* grid */}
             <div
                 ref={scrollContainerRef}
@@ -653,10 +723,6 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                 className="overflow-auto focus:outline-none"
                 style={{ height: height - 44 }} // minus toolbar height
             >
-                {/* screen reader live region */}
-                <div aria-live="polite" aria-atomic="true" className="sr-only">
-                    {announcement}
-                </div>
 
                 {/* header row */}
                 <div

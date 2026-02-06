@@ -44,6 +44,18 @@ export default meta
 type Story = StoryObj<typeof DataGrid>
 
 /**
+ * Quick demo with 100 rows.
+ * This is lighter weight for the Docs page.
+ */
+export const QuickDemo: Story = {
+    args: {
+        rows: makeRows(100),
+        columns: defaultColumns,
+        height: 400,
+    },
+}
+
+/**
  * Default story with 50000 rows to demonstratee virtualirzation performance
  * Screoll rapidly to verify smooth 60 FPS scrolling
  */
