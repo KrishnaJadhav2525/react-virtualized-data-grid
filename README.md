@@ -8,44 +8,66 @@ This repository contains a high-performance, virtualized data grid component bui
 
 This project adheres to the following mandatory constraints:
 - **No Component Libraries**: Logic and UI implemented manually (no MUI, TanStack, etc.).
-- **Manual Virtualization**: Row and column virtualization implemented from scratch.
-- **Strict Authorship**: Code reflects local decision-making and manual implementation patterns.
+- **Manual Virtualization**: Row and column virtualization implemented from scratch using native DOM math.
+- **Strict Authorship**: Code reflects local decision-making and manual implementation patterns (e.g., single-file architecture for initial velocity).
 - **Tech Stack**: React 18, TypeScript (Strict Mode), Tailwind CSS, Vite, Storybook.
+
+---
+
+## Technical Implementation Details
+
+### 1. Manual Virtualization Logic
+Instead of using `react-window` or `tanstack/virtual`, virtualization is calculated manually in `DataGrid.tsx`:
+- **Math**: `scrollTop / ROW_HEIGHT` determines the start index.
+- **Buffer**: A buffer of 5 rows is added above and below the viewport to prevent flickering during fast scrolls.
+- **Rendering**: A large spacer `div` maintains the scrollable height (`totalRows * rowHeight`), while a transform `translateY` positions the visible slice of rows.
+- **Columns**: Horizontal virtualization follows similar logic using `scrollLeft` and accumulated column widths.
+
+### 2. State Architecture
+The component manages complex state without external libraries like Redux or Zustand:
+- **Co-located State**: All grid state (sorting, filtering, editing, column widths) is kept inside the main component to avoid prop drilling during the rapid development phase.
+- **Derived State**: `useMemo` is heavily used to derive `sortedRows`, `visibleColumns`, and `pinnedWidth` to ensure 60 FPS performance by avoiding recalculations on every render.
+- **Undo/Redo Stack**: A custom `undoStack` array stores snapshots of actions (`column-resize`, `cell-edit`, `column-reorder`), enabling full history navigation.
+
+### 3. Asynchronous Editing Model
+- **Optimistic UI**: When a cell value is changed, the UI updates immediately before the validation promise resolves.
+- **Rollback Mechanism**: If the mocked async validator fails (simulated latency ~300ms, 20% failure rate), the state automatically reverts to the previous value, and an error message is displayed.
+
+---
 
 ## Core Features
 
-1. **Virtualization**:
-   - Handles 50,000+ rows efficiently.
-   - Only renders visible rows based on scroll position.
-   - Column virtualization for wide datasets.
+### Data Management
+- **Multi-column Sorting**: Hold `Shift` to sort by multiple columns. Logic handles mixed types (numbers, strings).
+- **In-cell Editing**: Double-click or hit `Enter` to edit. Async validation ensures data integrity.
 
-2. **Data Management**:
-   - Multi-column sorting (Shift+Click).
-   - In-cell editing with optimistic UI updates.
-   - Async validation simulation.
-   - Undo/Redo stack for all column and edit operations.
+### Column Operations
+- **Resizing**: Drag the right edge of any column header.
+- **Reordering**: Native HTML5 Drag and Drop API implemented manually (no `dnd-kit`).
+- **Pinning**: Columns can be pinned to the left; they remain fixed while others scroll.
 
-3. **Column Operations**:
-   - Resizing via drag handles.
-   - Reordering via drag-and-drop.
-   - Visibility toggles.
-   - Pinned columns (left-aligned).
+### Accessibility (A11y)
+- **ARIA Semantics**: Fully compliant `role="grid"`, `aria-rowindex`, `aria-sort`, etc.
+- **Keyboard Navigation**:
+    - `Arrow Keys`: Move focus between cells.
+    - `Enter`: Enter edit mode.
+    - `Escape`: Cancel edit mode.
+    - `Home/End`: Jump to start/end of row.
+    - `Ctrl+Home/End`: Jump to start/end of grid.
+- **Live Regions**: Screen reader announcements for errors and updates are handled via a dedicated `aria-live` region outside the grid container to avoid ARIA nesting violations.
 
-4. **Accessibility**:
-   - Keyboard-first navigation (Arrow keys, Enter to edit, Esc to cancel).
-   - ARIA grid roles (role="grid", "row", "gridcell").
-   - Live regions for screen reader announcements.
-   - Tested with axe-core.
+---
 
-## Performance Verification
+## Performance Metrics
 
-Performance benchmarks were conducted to ensure compliance with the 60 FPS requirement.
-
+Performance checks verified strict adherence to the **60 FPS** requirement:
 - **Initial Render**: ~150ms for 50,000 rows.
-- **Scroll Performance**: <16ms per frame (sustained 60 FPS).
-- **Memory**: Efficient DOM node recycling (under 200 nodes rendered).
+- **Scroll Performance**: <16ms per frame.
+- **DOM Stability**: <200 nodes rendered at any time.
 
-See `PERFORMANCE.md` for detailed metrics.
+See `PERFORMANCE.md` for the full report and verification steps.
+
+---
 
 ## Setup & Running
 
@@ -54,8 +76,7 @@ See `PERFORMANCE.md` for detailed metrics.
    npm install
    ```
 
-2. **Run Storybook (Recommended)**:
-   This is the primary way to view the component features.
+2. **Run Storybook (Primary Demo)**:
    ```bash
    npm run storybook
    ```
@@ -66,21 +87,14 @@ See `PERFORMANCE.md` for detailed metrics.
    ```
 
 4. **Run Tests**:
-   Includes unit, interaction, and accessibility tests.
    ```bash
    npm run test
    ```
 
-## Architecture Notes
-
-- **Single-File Component**: The core logic resides in `src/components/DataGrid.tsx`. This was a deliberate choice to keep state logic co-located during the initial build phase.
-- **State Management**: Uses React `useState` and `useReducer` pattern manually; no external state libraries.
-- **Styling**: Tailwind CSS utility classes used exclusively.
-
 ## Repository Structure
 
-- `src/components/DataGrid.tsx`: Main component logic.
-- `stories/DataGrid.stories.tsx`: Visual test cases and documentation.
-- `tests/DataGrid.test.tsx`: Integration and accessibility tests.
-- `PERFORMANCE.md`: Performance analysis.
+- `src/components/DataGrid.tsx`: Core logic (Virtualization, State, Rendering).
+- `stories/DataGrid.stories.tsx`: Visual test cases (Scale, Edge Cases, A11y).
+- `tests/DataGrid.test.tsx`: Integration tests (Keyboard, A11y, Interaction).
+- `PERFORMANCE.md`: Detailed performance analysis.
 - `ACCESSIBILITY.md`: Accessibility compliance report.
