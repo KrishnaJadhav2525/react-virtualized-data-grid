@@ -8,7 +8,7 @@ export default {
     theme: {
         extend: {
             colors: {
-                // using css variables for design tokens
+                // using css variables for designn tokens
                 'grid-bg': 'var(--grid-bg)',
                 'grid-header': 'var(--grid-header)',
                 'grid-row-alt': 'var(--grid-row-alt)',

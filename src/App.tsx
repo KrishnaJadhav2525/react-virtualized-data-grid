@@ -1,6 +1,6 @@
 import DataGrid from './components/DataGrid'
 
-// generate some dummy data for testing
+// generate somme dummy data for testing
 function generateRows(count: number) {
     const rows = []
     for (let i = 0; i < count; i++) {

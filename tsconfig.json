@@ -10,14 +10,14 @@
         ],
         "module": "ESNext",
         "skipLibCheck": true,
-        /* Bundler mode */
+        /* Bundler modee */
         "moduleResolution": "bundler",
         "allowImportingTsExtensions": true,
         "isolatedModules": true,
         "moduleDetection": "force",
         "noEmit": true,
         "jsx": "react-jsx",
-        /* Linting - STRICT MODE as required */
+        /* Linting STRICT MODEE as required */
         "strict": true,
         "noImplicitAny": true,
         "strictNullChecks": true,

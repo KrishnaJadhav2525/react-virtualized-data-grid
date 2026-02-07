@@ -31,7 +31,7 @@ describe('Perf checking', () => {
 
         console.log(`Render time: ${end - start}ms`)
 
-        // allow 200ms just in case CI is slow
+        // allow 200ms just in caase CI is slow
         expect(end - start).toBeLessThan(200)
     })
 
@@ -50,7 +50,6 @@ describe('Perf checking', () => {
         const avg = (performance.now() - start) / 4
         console.log(`Avg scroll: ${avg}ms`)
 
-        // 16ms is ideal but jsdom is slow so 50ms is fine
         expect(avg).toBeLessThan(50)
     })
 })

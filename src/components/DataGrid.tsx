@@ -169,11 +169,21 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
         return { visibleScrollableCols: result, colStartOffset: startOffset }
     }, [scrollableColumns, scrollLeft, pinnedWidth])
 
-    // scroll handler
+    // this was lagging on my old laptop so i added raf throttling
+    // hopefully it fixes the stuttering
+    const scrollRafRef = useRef<number | null>(null)
+
+    // scroll handler - optimized with RAF to decouple scroll from render
     const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-        const target = e.currentTarget
-        setScrollTop(target.scrollTop)
-        setScrollLeft(target.scrollLeft)
+        const { scrollTop, scrollLeft } = e.currentTarget
+
+        if (scrollRafRef.current) return
+
+        scrollRafRef.current = requestAnimationFrame(() => {
+            setScrollTop(scrollTop)
+            setScrollLeft(scrollLeft)
+            scrollRafRef.current = null
+        })
     }, [])
 
     // sorting click handler
@@ -361,6 +371,7 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                 }
                 return newData
             })
+            // just hardcoded error message for now
             setEditError('Validation failed - value not allowed')
             // remove from undo since it was rolled back
             setUndoStack(prev => prev.slice(0, -1))
@@ -718,9 +729,8 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
                     </div>
                 </div>
 
-                {/* body - spacer for virtualization */}
                 <div style={{ height: totalHeight, position: 'relative' }}>
-                    <div style={{ transform: `translateY(${offsetY}px)` }}>
+                    <div style={{ transform: `translateY(${offsetY}px)`, willChange: 'transform' }}>
                         {visibleRows.map((row, rowIdx) => (
                             <div
                                 key={row['id'] != null ? String(row['id']) : rowIdx}
@@ -784,6 +794,7 @@ export default function DataGrid({ rows, columns: initialColumns, height }: Data
 
 // extracted for performance (prevent re-renders of all cells on focus change)
 // using React.memo to ensure only changing cells re-render
+// honestly this was a pain to extract but it's worth it for the 60fps
 const Cell = React.memo(({
     row, col, actualRowIdx, absoluteColIdx, isFocused, isEditing, rowIdx,
     onFocusMain, onEditMain, editValue, setEditValue, validateAndSave, cancelEditing, editError

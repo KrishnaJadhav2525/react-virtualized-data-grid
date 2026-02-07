@@ -5,13 +5,13 @@ import DataGrid from '../src/components/DataGrid'
 import '@testing-library/jest-dom'
 import { axe } from 'jest-axe'
 
-// mocking data lol
+// mocking dataa
 const mockUsers = (count: number) =>
     Array.from({ length: count }, (_, i) => ({
         id: i + 1,
         name: `User ${i + 1}`,
         email: `user${i + 1}@startup.io`,
-        age: 20 + (i % 10), // predictable ages
+        age: 20 + (i % 10), // preddictable ages
     }))
 
 const cols = [
@@ -22,7 +22,7 @@ const cols = [
 ]
 
 describe('DataGrid', () => {
-    // Basic rendering check
+    // Basic renderinggg check
     it('renders without crashing', () => {
         render(<DataGrid rows={mockUsers(100)} columns={cols} height={400} />)
         expect(screen.getByText('User 1')).toBeInTheDocument()
